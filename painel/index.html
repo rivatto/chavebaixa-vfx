@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chavebaixa VFX</title>
-<!-- chavebaixa-vfx-panel v2.1.1 -->
+<!-- chavebaixa-vfx-panel v2.1.2 -->
 <style>
   :root {
     --bg: #09090b; --card: rgba(18, 18, 21, .76); --card2: rgba(44, 44, 50, .86); --line: rgba(255, 255, 255, .16); --txt: #f4f4f5; --dim: #b4b4bb;
@@ -281,7 +281,7 @@
 <script>
 (function () {
   'use strict';
-  var VERSION = '2.1.1';
+  var VERSION = '2.1.2';
   var UPDATE_URL = 'https://raw.githubusercontent.com/rivatto/chavebaixa-vfx/main/';
   var CEP = window.__adobe_cep__ || null;
   var FS = (CEP && window.cep && window.cep.fs) ? window.cep.fs : null;
@@ -346,8 +346,8 @@
   }
 
   // ------------------------------------------------------------ presets no disco
-  var CAT_LABEL = { cc: 'CC', shake: 'Shake', mix: 'Mix FX', vfx: 'Liquid', text: 'Text', crt: 'CRT', overlay: 'Overlay' };
-  var CAT_ORDER = ['cc', 'shake', 'mix', 'vfx', 'text', 'crt', 'overlay'];
+  var CAT_LABEL = { cc: 'CC', shake: 'Shake', mix: 'Mix FX', vfx: 'Liquid', transition: 'Transição', text: 'Text', crt: 'CRT', overlay: 'Overlay' };
+  var CAT_ORDER = ['cc', 'shake', 'mix', 'vfx', 'transition', 'text', 'crt', 'overlay'];
   var MEDIA = /\.(mov|mp4|m4v|webm|avi|mxf|png|jpe?g|tiff?|psd|gif|webp)$/i;
   var cats = [], byId = {};
   function natural(a, b) { return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }); }
@@ -805,7 +805,7 @@
   function checkPack(manual) {   // presets e previas vem num pacote separado, baixado pelo instalador
     return getText('pack.txt').then(function (t) {
       var n = parseInt(t, 10) || 0;
-      if (FS && n > localPack()) { toast('Saiu um pacote novo de presets.\nRode o Instalar-chavebaixa-vfx.bat de novo para baixar.', 12000); }
+      if (FS && n > localPack()) { toast('Saiu um pacote novo de presets.\nBaixe o Instalar-chavebaixa-vfx.bat novo em github.com/rivatto/chavebaixa-vfx e rode de novo.', 15000); }
       else if (manual) { toast('Você já está na versão mais nova (v' + VERSION + ').\nSe acabei de publicar algo, o GitHub leva até 5 minutos.'); }
     });
   }
