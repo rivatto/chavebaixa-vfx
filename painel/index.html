@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chavebaixa VFX</title>
+<!-- chavebaixa-vfx-panel v2.1.0 -->
+<style>
+  :root {
+    --bg: #09090b; --card: rgba(18, 18, 21, .76); --card2: rgba(44, 44, 50, .86); --line: rgba(255, 255, 255, .16); --txt: #f4f4f5; --dim: #b4b4bb;
+    --acc: #f02b36; --acc-hi: #ff4d57; --acc-lo: #b81a24; --acc-rgb: 240, 43, 54; --on-acc: #fff; --veil: .66; --px: 0; --py: 0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--txt); font: 12px/1.35 "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden; -webkit-user-select: none; user-select: none; cursor: default;
+  }
+  button { font: inherit; color: inherit; }
+  button:focus, input:focus { outline: none; }
+
+  /* ---------- fundo animado ---------- */
+  #bg { position: fixed; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; z-index: 0; pointer-events: none; background: var(--bg); }
+  #scene { position: absolute; transform: translate(calc(var(--px) * -9px), calc(var(--py) * -9px)); transition: transform .5s ease-out; }
+  .art { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: center top / cover no-repeat; transform-origin: 50% 26%; animation: drift 28s ease-in-out infinite alternate; }
+  @keyframes drift { from { transform: scale(1.04); } to { transform: scale(1.13) translateY(-1.2%); } }
+  .bloom { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: center top / cover no-repeat; mix-blend-mode: screen;
+           transform-origin: 50% 26%; animation: drift 28s ease-in-out infinite alternate, flick 4.3s linear infinite; }
+  @keyframes flick { 0%, 100% { opacity: .42; } 7% { opacity: .7; } 9% { opacity: .26; } 11% { opacity: .82; } 13% { opacity: .5; } 34% { opacity: .58; }
+                     51% { opacity: .9; } 53% { opacity: .3; } 55% { opacity: .86; } 57% { opacity: .46; } 78% { opacity: .64; } 90% { opacity: .38; } }
+  #bg.hot .bloom { animation-duration: 28s, .5s; }
+  .ember { position: absolute; bottom: -10px; width: 4px; height: 4px; border-radius: 50%; background: var(--acc-hi); box-shadow: 0 0 6px 1px rgba(var(--acc-rgb), .8); opacity: 0; animation: rise linear infinite; }
+  @keyframes rise { 0% { transform: translate(0, 0) scale(1); opacity: 0; } 12% { opacity: .9; } 70% { opacity: .55; } 100% { transform: translate(var(--sway), -78vh) scale(.3); opacity: 0; } }
+  .ember.burst { animation: burst 1.5s ease-out forwards; }
+  @keyframes burst { 0% { transform: translate(0, 0) scale(1.6); opacity: 1; } 100% { transform: translate(var(--sway), var(--up)) scale(.2); opacity: 0; } }
+  .veil { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+          background: linear-gradient(to bottom, rgba(9, 7, 14, .16) 0, rgba(9, 7, 14, .30) 40px, rgba(9, 7, 14, var(--veil)) 96px, rgba(9, 7, 14, calc(var(--veil) + .08)) 100%); }
+  #bg.noglow .bloom, #bg.noembers #embers, #bg.plain .art, #bg.plain .bloom { display: none; }
+  #bg.plain { background: radial-gradient(ellipse 120% 70% at 50% -10%, rgba(var(--acc-rgb), .42), rgba(var(--acc-rgb), 0) 70%), radial-gradient(ellipse 90% 50% at 50% 115%, rgba(var(--acc-rgb), .16), rgba(var(--acc-rgb), 0) 70%), var(--bg); }
+  .noanim #bg * { animation-play-state: paused !important; }
+  .noanim .ember { display: none; }
+  .noanim #scene { transition: none; transform: none; }
+
+  /* ---------- estrutura ---------- */
+  #app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; padding: 8px 10px 10px; }
+  .top { flex: 0 0 auto; display: flex; align-items: center; height: 34px; margin-bottom: 6px; }
+  .brand { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; text-shadow: 0 2px 10px rgba(0, 0, 0, .95), 0 0 22px rgba(0, 0, 0, .7); white-space: nowrap; }
+  .brand b { color: var(--acc-hi); font-weight: 800; margin-left: 3px; text-shadow: 0 2px 10px rgba(0, 0, 0, .95), 0 0 18px rgba(var(--acc-rgb), .55); }
+  .ver { margin-left: 7px; padding-top: 6px; color: #fff; opacity: .7; font-size: 10px; font-weight: 700; text-shadow: 0 1px 6px #000; }
+  .top .btn { margin-left: auto; }
+
+  .btn {
+    display: inline-block; border: 1px solid var(--line); background: var(--card); color: var(--txt); border-radius: 12px;
+    padding: 7px 10px; font-weight: 700; cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background .15s, border-color .15s, transform .08s;
+  }
+  .btn:hover { background: var(--card2); border-color: var(--acc); }
+  .btn:active { transform: scale(.97); }
+  .btn.sm { padding: 4px 10px; border-radius: 10px; font-size: 11px; }
+  .btn.primary { background: var(--acc); border-color: var(--acc); color: var(--on-acc); letter-spacing: .3px; padding: 10px; }
+  .btn.primary:hover { background: var(--acc-hi); border-color: var(--acc-hi); }
+  .btn.primary:active { background: var(--acc-lo); }
+  .btn[disabled] { opacity: .5; pointer-events: none; }
+
+  /* ---------- categorias ---------- */
+  #tabs { flex: 0 0 auto; display: flex; flex-wrap: wrap; margin: 0 -3px 3px; }
+  .tab {
+    margin: 0 3px 5px; border: 1px solid var(--line); background: var(--card); border-radius: 11px; padding: 4px 10px; font-weight: 700; font-size: 11px;
+    cursor: pointer; white-space: nowrap; color: var(--dim); transition: background .15s, border-color .15s, color .15s;
+  }
+  .tab:hover { background: var(--card2); color: var(--txt); }
+  .tab.sel { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+  .tab small { font-size: 9px; opacity: .75; margin-left: 5px; font-weight: 700; }
+
+  .search { flex: 0 0 auto; position: relative; margin-bottom: 8px; }
+  .search input {
+    width: 100%; background: rgba(14, 14, 16, .86); color: var(--txt); border: 1px solid var(--line); border-radius: 11px; padding: 6px 28px 6px 28px; font: inherit;
+    -webkit-user-select: text; user-select: text; transition: border-color .15s;
+  }
+  .search input:focus { border-color: var(--acc); }
+  .search:before { content: ""; position: absolute; left: 10px; top: 8px; width: 8px; height: 8px; border: 2px solid var(--dim); border-radius: 50%; }
+  .search:after { content: ""; position: absolute; left: 19px; top: 18px; width: 5px; height: 2px; background: var(--dim); transform: rotate(45deg); border-radius: 1px; }
+  #bClear { position: absolute; right: 5px; top: 4px; width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); cursor: pointer; font-size: 14px; line-height: 18px; display: none; }
+  #bClear:hover { color: var(--txt); background: var(--card2); }
+
+  /* ---------- previa + lista ---------- */
+  #main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  #pvbox { flex: 0 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 8px; display: flex; flex-direction: column; }
+  #pv { position: relative; height: 150px; background: #050506; }
+  #pv img, #pv video { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+  #pvEmpty { position: absolute; left: 0; right: 0; top: 50%; margin-top: -9px; text-align: center; color: var(--dim); font-size: 11px; }
+  .pvinfo { padding: 6px 10px 7px; border-top: 1px solid var(--line); min-height: 44px; }
+  #pvName { font-weight: 800; font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pvMeta { color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pvMeta.warn { color: #ffc21a; white-space: normal; }
+
+  #list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); grid-auto-rows: min-content; grid-gap: 6px; align-content: start; padding-right: 2px; }
+  #list::-webkit-scrollbar, #drawerIn::-webkit-scrollbar { width: 10px; }
+  #list::-webkit-scrollbar-track, #drawerIn::-webkit-scrollbar-track { background: transparent; }
+  #list::-webkit-scrollbar-thumb, #drawerIn::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .22); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  #list::-webkit-scrollbar-thumb:hover, #drawerIn::-webkit-scrollbar-thumb:hover { background: var(--acc); background-clip: padding-box; }
+  .item {
+    display: flex; align-items: center; min-width: 0; height: 30px; border: 1px solid var(--line); background: var(--card); border-radius: 11px; padding: 0 4px 0 11px;
+    cursor: pointer; text-align: left; transition: background .15s, border-color .15s, transform .08s;
+  }
+  .item:hover { background: var(--card2); border-color: rgba(255, 255, 255, .32); }
+  .item:active { transform: scale(.98); }
+  .item.sel { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; background: rgba(var(--acc-rgb), .16); }
+  .item .nm { flex: 1 1 auto; min-width: 0; font-weight: 700; font-size: 11px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .ct { flex: 0 0 auto; font-size: 8px; font-weight: 800; letter-spacing: .3px; color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 0 4px; margin-left: 4px; text-transform: uppercase; }
+  .item .wr { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; background: #ffc21a; color: #111; font-size: 10px; font-weight: 900; line-height: 14px; text-align: center; margin-left: 4px; }
+  .item .st { flex: 0 0 auto; width: 22px; height: 22px; line-height: 22px; text-align: center; font-size: 13px; color: rgba(255, 255, 255, .22); border-radius: 50%; margin-left: 1px; transition: color .12s, transform .12s; }
+  .item .st:hover { color: #fff; transform: scale(1.2); }
+  .item .st.on { color: var(--acc-hi); }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--dim); padding: 22px 12px; line-height: 1.5; }
+  .empty .btn { margin-top: 10px; }
+
+  /* ---------- rodape ---------- */
+  footer { flex: 0 0 auto; padding-top: 8px; }
+  .dock { background: #0d0d0f; border: 1px solid var(--line); border-radius: 16px; padding: 8px 10px 10px; box-shadow: 0 -8px 16px rgba(0, 0, 0, .35); }
+  .compline { display: flex; align-items: center; color: var(--dim); font-size: 10px; margin: 0 0 6px; white-space: nowrap; overflow: hidden; }
+  .compline b { color: var(--txt); margin: 0 4px; overflow: hidden; text-overflow: ellipsis; }
+  .compline .led { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: #666; margin-right: 6px; }
+  .compline.ok .led { background: #28c840; }
+  .dock .btn.primary { width: 100%; display: block; }
+
+  /* interruptor */
+  .sw { display: inline-flex; align-items: center; cursor: pointer; margin: 0 12px 7px 0; white-space: nowrap; max-width: 100%; }
+  .sw input { display: none; }
+  .sw i { flex: 0 0 auto; position: relative; width: 28px; height: 16px; border-radius: 8px; background: #3d3d45; margin-right: 6px; transition: background .18s; }
+  .sw i:after { content: ""; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .18s ease; }
+  .sw input:checked + i { background: var(--acc); }
+  .sw input:checked + i:after { transform: translateX(12px); }
+  .sw span { overflow: hidden; text-overflow: ellipsis; }
+  .wrap { display: flex; flex-wrap: wrap; }
+
+  /* ---------- painel Personalizar ---------- */
+  #drawer { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 7; background: rgba(8, 8, 10, .9); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); display: none; flex-direction: column; padding: 8px 10px 10px; }
+  #drawer.show { display: flex; }
+  #drawerIn { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
+  .dhead { flex: 0 0 auto; display: flex; align-items: center; height: 34px; margin-bottom: 6px; font-size: 16px; font-weight: 800; }
+  .dhead .btn { margin-left: auto; }
+  h4 { margin: 12px 2px 6px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--dim); font-weight: 800; }
+  .row { display: flex; align-items: center; margin-bottom: 7px; }
+  .row > * + * { margin-left: 7px; }
+  .grow { flex: 1 1 0; min-width: 0; }
+  label.l, span.l { color: var(--dim); white-space: nowrap; }
+  input[type=text].f { background: #0e0e10; color: var(--txt); border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px; font: inherit; -webkit-user-select: text; user-select: text; }
+  input[type=text].f:focus { border-color: var(--acc); }
+  .bgopts { display: flex; margin: 0 -3px 7px; }
+  .bgopt { flex: 1 1 0; min-width: 0; margin: 0 3px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--card); transition: border-color .15s, transform .08s; }
+  .bgopt:hover { border-color: rgba(255, 255, 255, .32); }
+  .bgopt:active { transform: scale(.97); }
+  .bgopt.sel { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; }
+  .bgopt .th { height: 64px; background: #111 center top / cover no-repeat; position: relative; }
+  .bgopt .th.empty:after { content: "+"; position: absolute; left: 0; right: 0; top: 50%; margin-top: -15px; text-align: center; font-size: 26px; line-height: 30px; font-weight: 300; color: var(--dim); }
+  .bgopt span { display: block; padding: 4px 6px 5px; font-size: 10px; font-weight: 700; text-align: center; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bgopt.sel span { color: var(--txt); }
+  .swatches { display: flex; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+  .swatch { position: relative; flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; margin: 0 7px 7px 0; cursor: pointer; border: 2px solid rgba(255, 255, 255, .16); transition: transform .12s, border-color .12s; }
+  .swatch:hover { transform: scale(1.13); }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 3px rgba(var(--acc-rgb), .45); }
+  .swatch.custom { background: #888; background: conic-gradient(#f33, #fd2, #3e5, #2de, #36f, #c3f, #f33); overflow: hidden; }
+  .swatch.custom input { position: absolute; left: -4px; top: -4px; width: 30px; height: 30px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+  input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .18); outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--acc); border: 2px solid #fff; }
+  .note { color: var(--dim); font-size: 10px; margin: 0 2px 8px; line-height: 1.45; }
+
+  /* ---------- painel largo: lista a esquerda, previa a direita ---------- */
+  @media (min-width: 540px) {
+    #main { flex-direction: row-reverse; }
+    #pvbox { flex: 0 0 44%; max-width: 360px; margin: 0 0 0 8px; align-self: flex-start; max-height: 100%; }
+    #pv { height: 0; padding-bottom: 62%; }
+  }
+  @media (max-height: 600px) and (max-width: 539px) { #pv { height: 112px; } }
+  @media (max-height: 400px) and (max-width: 539px) { #pvbox { display: none; } }
+  @media (max-height: 300px) { .compline, .dock .sw { display: none; } .top { display: none; } }
+  @media (max-width: 300px) { .ver { display: none; } .brand { font-size: 17px; } #app { padding: 7px; } }
+
+  /* ---------- aviso ---------- */
+  #toast {
+    position: fixed; left: 12px; right: 12px; bottom: 112px; background: #0c0c0e; border: 1px solid var(--acc); color: var(--txt); border-radius: 13px; padding: 10px 12px;
+    white-space: pre-wrap; box-shadow: 0 10px 28px rgba(0, 0, 0, .6); opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .22s, transform .22s; z-index: 9;
+    -webkit-user-select: text; user-select: text;
+  }
+  #toast.show { opacity: 1; transform: none; pointer-events: auto; }
+</style>
+</head>
+<body>
+<div id="bg" aria-hidden="true">
+  <div id="scene"><div class="art"></div><div class="bloom"></div></div>
+  <div class="veil"></div>
+  <div id="embers"></div>
+</div>
+
+<div id="app">
+  <div class="top">
+    <div class="brand">chavebaixa<b>VFX</b></div>
+    <span class="ver" id="ver"></span>
+    <button class="btn sm" id="bGear" title="Fundo, cor do painel, categorias e opções">Personalizar</button>
+  </div>
+  <div id="tabs"></div>
+  <div class="search">
+    <input type="text" id="eSearch" placeholder="Buscar em todas as categorias" spellcheck="false" autocomplete="off">
+    <button id="bClear" title="Limpar busca">&times;</button>
+  </div>
+  <div id="main">
+    <div id="pvbox">
+      <div id="pv"><img id="pvImg" alt=""><video id="pvVid" muted loop></video><div id="pvEmpty">Escolha um preset para ver a prévia</div></div>
+      <div class="pvinfo"><div id="pvName">&nbsp;</div><div id="pvMeta"></div></div>
+    </div>
+    <div id="list"></div>
+  </div>
+  <footer>
+    <div class="dock">
+      <div class="compline" id="compline"><span class="led"></span><span id="compT">Nenhuma comp aberta</span></div>
+      <label class="sw" id="swAdj"><input type="checkbox" id="cAdj"><i></i><span>Aplicar numa camada de ajuste nova</span></label>
+      <button class="btn primary" id="bGo">APLICAR</button>
+    </div>
+  </footer>
+</div>
+
+<div id="drawer">
+  <div class="dhead">Personalizar<button class="btn sm" id="bClose">Fechar</button></div>
+  <div id="drawerIn">
+    <h4 style="margin-top:2px">Fundo</h4>
+    <div class="bgopts">
+      <div class="bgopt" data-bg="art"><div class="th" id="thArt"></div><span>Arte</span></div>
+      <div class="bgopt" data-bg="plain"><div class="th" id="thPlain"></div><span>Liso</span></div>
+      <div class="bgopt" data-bg="photo"><div class="th empty" id="thPhoto"></div><span>Minha foto</span></div>
+    </div>
+    <div class="row">
+      <button class="btn grow" id="bPhoto">Enviar foto…</button>
+      <button class="btn" id="bPhotoDel" title="Apagar a foto enviada">Apagar foto</button>
+    </div>
+    <input type="file" id="photoFile" accept="image/*" style="display:none">
+    <div class="wrap">
+      <label class="sw"><input type="checkbox" id="cBW"><i></i><span>Preto e branco</span></label>
+      <label class="sw"><input type="checkbox" id="cGlow"><i></i><span>Glow piscando</span></label>
+      <label class="sw"><input type="checkbox" id="cEmbers"><i></i><span>Faíscas</span></label>
+    </div>
+    <div class="row">
+      <label class="l">Escurecer</label>
+      <input type="range" id="rVeil" min="15" max="92" step="1" class="grow">
+      <span class="l" id="rVeilT" style="width:34px;text-align:right"></span>
+    </div>
+
+    <h4>Cor do painel</h4>
+    <div class="swatches" id="swatches"></div>
+    <div class="row">
+      <label class="l">Código</label>
+      <input type="text" class="f" id="eHex" maxlength="7" spellcheck="false" style="width:84px">
+    </div>
+
+    <h4>Categorias no menu</h4>
+    <div class="wrap" id="catSw"></div>
+
+    <h4>Opções</h4>
+    <div class="wrap">
+      <label class="sw"><input type="checkbox" id="cHover"><i></i><span>Prévia ao passar o mouse</span></label>
+      <label class="sw"><input type="checkbox" id="cHideMiss"><i></i><span>Esconder presets com plugin faltando</span></label>
+      <label class="sw"><input type="checkbox" id="cAnim"><i></i><span>Animações do painel</span></label>
+    </div>
+    <div class="note" id="missNote"></div>
+    <div class="row">
+      <button class="btn grow" id="bFolder">Abrir pasta dos presets</button>
+      <button class="btn grow" id="bRescan">Recarregar lista</button>
+    </div>
+    <div class="row">
+      <button class="btn grow" id="bReset">Restaurar aparência padrão</button>
+    </div>
+    <div class="row">
+      <button class="btn grow" id="bUpd">Procurar atualização</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="art.js"></script>
+<script src="fx-index.js"></script>
+<script>
+(function () {
+  'use strict';
+  var VERSION = '2.1.0';
+  var UPDATE_URL = 'https://raw.githubusercontent.com/rivatto/chavebaixa-vfx/main/';
+  var CEP = window.__adobe_cep__ || null;
+  var FS = (CEP && window.cep && window.cep.fs) ? window.cep.fs : null;
+  var FX = window.XRF_FX || {}, FXN = window.XRF_FX_NAMES || {}, ART_SRC = window.XRF_ART || '';
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (text !== undefined) { e.textContent = text; } return e; }
+  function each(list, fn) { Array.prototype.forEach.call(list, fn); }
+
+  // ------------------------------------------------------------ preferencias
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem('xrf.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem('xrf.' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  // ------------------------------------------------------------ aviso
+  var toastT = null;
+  function toast(msg, ms) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('show'); }, ms || Math.min(9000, 2400 + String(msg).length * 45));
+  }
+  $('toast').addEventListener('click', function () { this.classList.remove('show'); });
+
+  // ------------------------------------------------------------ ponte com o After
+  function evalScript(script) { return new Promise(function (resolve) { CEP.evalScript(script, function (r) { resolve(r); }); }); }
+  function host(fn, args) {
+    if (!CEP) { return Promise.resolve(demo(fn, args || [])); }
+    var s = 'XRF.' + fn + '(' + (args || []).map(function (a) { return JSON.stringify(String(a)); }).join(',') + ')';
+    return evalScript(s).then(function (r) {
+      try { return JSON.parse(r); } catch (e) { return { ok: false, msg: 'O After não respondeu direito.\n' + String(r).slice(0, 200) }; }
+    });
+  }
+  function demo(fn, a) {   // fora do After (navegador): respostas de mentira so para ver a interface
+    if (fn === 'ping') { return { ok: true, comp: 'demo (fora do After)', sel: 1 }; }
+    if (fn === 'missing') { return { ok: true, missing: Object.keys(FXN) }; }
+    if (fn === 'apply' || fn === 'overlay') { return { ok: true, msg: 'Demonstração: no After isto aplicaria "' + (a[2] || a[0]) + '".' }; }
+    return { ok: false, msg: 'Só funciona dentro do After Effects.' };
+  }
+  function sysPath(type) {
+    var p = decodeURI(CEP.getSystemPath(type));
+    if (navigator.platform.indexOf('Win') >= 0) { p = p.replace('file:///', ''); } else { p = p.replace('file://', ''); }
+    return p.replace(/\\/g, '/').replace(/\/$/, '');
+  }
+  function loadHost() {
+    if (!CEP) { return Promise.resolve(true); }
+    var f = sysPath('extension') + '/jsx/main.jsx';
+    return evalScript('try { $.evalFile(new File(' + JSON.stringify(f) + ')); "ok " + XRF.VERSION; } catch (e) { "erro " + e.toString() + (e.line ? " (linha " + e.line + ")" : ""); }')
+      .then(function (r) {
+        if (String(r).indexOf('ok ') === 0) { return true; }
+        toast('Não consegui carregar o script do After.\n' + r, 12000); return false;
+      });
+  }
+  function ping() {
+    return host('ping').then(function (r) {
+      var okc = r && r.ok && r.comp;
+      $('compline').classList.toggle('ok', !!okc);
+      var t = $('compT'); t.textContent = '';
+      if (!okc) { t.textContent = 'Nenhuma comp aberta'; return; }
+      t.appendChild(document.createTextNode('Comp:')); t.appendChild(el('b', '', r.comp));
+      t.appendChild(document.createTextNode('· ' + (r.sel === 0 ? 'nenhuma camada selecionada' : (r.sel === 1 ? '1 camada selecionada' : r.sel + ' camadas selecionadas'))));
+    });
+  }
+
+  // ------------------------------------------------------------ presets no disco
+  var CAT_LABEL = { cc: 'CC', shake: 'Shake', mix: 'Mix FX', vfx: 'Liquid', text: 'Text', crt: 'CRT', overlay: 'Overlay' };
+  var CAT_ORDER = ['cc', 'shake', 'mix', 'vfx', 'text', 'crt', 'overlay'];
+  var MEDIA = /\.(mov|mp4|m4v|webm|avi|mxf|png|jpe?g|tiff?|psd|gif|webp)$/i;
+  var cats = [], byId = {};
+  function natural(a, b) { return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }); }
+  function catRank(id) { var i = CAT_ORDER.indexOf(id); return i < 0 ? 99 : i; }
+  function mkItem(cat, file, root) {
+    var dot = file.lastIndexOf('.'), name = file.substr(0, dot), ext = file.substr(dot + 1).toLowerCase(), ov = cat === 'overlay';
+    return { id: cat + '/' + name, cat: cat, name: name, ext: ext, overlay: ov, label: name.replace(/_/g, ' ').replace(/\s+/g, ' '),
+             path: root ? root + '/' + cat + '/' + file : '', fx: FX[cat + '/' + name] || [] };
+  }
+  function scan() {
+    cats = []; byId = {};
+    var found = {}, root = '';
+    if (FS) {
+      root = sysPath('extension') + '/preset';
+      var r = FS.readdir(root);
+      if (r.err !== 0) { toast('Não achei a pasta "preset" dentro do plugin.', 9000); }
+      (r.err === 0 ? r.data : []).forEach(function (d) {
+        if (/^[._]/.test(d) || d.indexOf('.') >= 0) { return; }
+        var rr = FS.readdir(root + '/' + d);
+        if (rr.err === 0) { found[d.toLowerCase()] = { dir: d, files: rr.data }; }
+      });
+    } else {   // demonstracao: usa o indice
+      Object.keys(FX).forEach(function (k) { var c = k.split('/')[0]; (found[c] = found[c] || { dir: c, files: [] }).files.push(k.substr(c.length + 1) + '.ffx'); });
+      found.overlay = found.overlay || { dir: 'overlay', files: [] };
+    }
+    Object.keys(found).sort(function (a, b) { return catRank(a) - catRank(b) || a.localeCompare(b); }).forEach(function (c) {
+      var f = found[c], items = [], lower = {};
+      f.files.forEach(function (n) { lower[n.toLowerCase()] = n; });
+      f.files.forEach(function (n) {
+        if (c === 'overlay') {
+          if (!MEDIA.test(n)) { return; }
+          var base = n.replace(/\.[^.]+$/, '');
+          // um .gif com o mesmo nome de outro arquivo e so a previa dele
+          if (/\.gif$/i.test(n) && f.files.some(function (o) { return o !== n && MEDIA.test(o) && o.replace(/\.[^.]+$/, '') === base; })) { return; }
+          var it = mkItem(f.dir, n, root); it.cat = c;
+          it.sibGif = lower[(base + '.gif').toLowerCase()] && !/\.gif$/i.test(n) ? root + '/' + f.dir + '/' + lower[(base + '.gif').toLowerCase()] : '';
+          items.push(it);
+        } else if (/\.ffx$/i.test(n)) { var p = mkItem(f.dir, n, root); p.cat = c; p.id = c + '/' + p.name; p.fx = FX[p.id] || []; items.push(p); }
+      });
+      items.sort(natural);
+      items.forEach(function (i) { byId[i.id] = i; });
+      cats.push({ id: c, label: CAT_LABEL[c] || f.dir.replace(/_/g, ' '), items: items });
+    });
+  }
+
+  // ------------------------------------------------------------ estado
+  var favs = {}; (store.get('favs', []) || []).forEach(function (id) { favs[id] = true; });
+  var hidden = {}; (store.get('hiddenCats', []) || []).forEach(function (id) { hidden[id] = true; });
+  var tab = store.get('tab', 'cc'), query = '', selId = store.get('sel', ''), missing = {}, missKnown = false;
+  var opt = { hover: store.get('hover', true), hideMiss: store.get('hideMiss', false), adj: store.get('adj', false) };
+  function visCats() { return cats.filter(function (c) { return !hidden[c.id]; }); }
+  function missOf(it) { return it.fx.filter(function (n) { return missing[n]; }); }
+  function fxName(n) { return FXN[n] || n; }
+  function uniq(a) { var s = {}; return a.filter(function (x) { if (s[x]) { return false; } s[x] = true; return true; }); }
+
+  // ------------------------------------------------------------ categorias
+  function renderTabs() {
+    var box = $('tabs'), vc = visCats(); box.innerHTML = '';
+    if (tab !== 'fav' && !vc.some(function (c) { return c.id === tab; })) { tab = vc.length ? vc[0].id : 'fav'; }
+    var add = function (id, label, n) {
+      var b = el('button', 'tab' + (id === tab && !query ? ' sel' : ''), label); b.appendChild(el('small', '', String(n)));
+      b.addEventListener('click', function () { tab = id; store.set('tab', id); if (query) { query = ''; $('eSearch').value = ''; $('bClear').style.display = 'none'; } renderTabs(); renderList(); });
+      box.appendChild(b);
+    };
+    vc.forEach(function (c) { add(c.id, c.label, c.items.length); });
+    add('fav', '★ Favoritos', Object.keys(favs).filter(function (id) { return byId[id]; }).length);
+  }
+
+  // ------------------------------------------------------------ lista
+  function currentItems() {
+    var out = [], q = query.toLowerCase();
+    if (q) { visCats().forEach(function (c) { c.items.forEach(function (i) { if (i.label.toLowerCase().indexOf(q) >= 0 || i.name.toLowerCase().indexOf(q) >= 0) { out.push(i); } }); }); }
+    else if (tab === 'fav') { visCats().forEach(function (c) { c.items.forEach(function (i) { if (favs[i.id]) { out.push(i); } }); }); }
+    else { cats.forEach(function (c) { if (c.id === tab) { out = c.items.slice(); } }); }
+    if (opt.hideMiss && missKnown) { out = out.filter(function (i) { return !missOf(i).length; }); }
+    return out;
+  }
+  function catLabel(id) { for (var i = 0; i < cats.length; i++) { if (cats[i].id === id) { return cats[i].label; } } return id; }
+  function renderList() {
+    var box = $('list'), items = currentItems(); box.innerHTML = '';
+    if (!items.length) {
+      var e = el('div', 'empty');
+      if (query) { e.textContent = 'Nada encontrado para "' + query + '".'; }
+      else if (tab === 'fav') { e.textContent = 'Nenhum favorito ainda.\nClique na estrela ☆ de um preset para guardar aqui.'; e.style.whiteSpace = 'pre-line'; }
+      else if (tab === 'overlay') {
+        e.textContent = 'A pasta de overlays está vazia. Coloque vídeos ou imagens nela e eles aparecem aqui (um .gif com o mesmo nome vira a prévia).';
+        e.appendChild(document.createElement('br'));
+        var b = el('button', 'btn', 'Abrir pasta de overlays'); b.addEventListener('click', function () { openFolder('/overlay'); }); e.appendChild(b);
+      } else { e.textContent = opt.hideMiss ? 'Todos os presets daqui precisam de plugins que não estão instalados.' : 'Nenhum preset nesta categoria.'; }
+      box.appendChild(e); return;
+    }
+    var showCat = !!query || tab === 'fav';
+    items.forEach(function (it) {
+      var b = el('button', 'item' + (it.id === selId ? ' sel' : '')); b.setAttribute('data-id', it.id);
+      b.appendChild(el('span', 'nm', it.label));
+      if (showCat) { b.appendChild(el('span', 'ct', catLabel(it.cat))); }
+      var m = missOf(it);
+      if (m.length) { var w = el('span', 'wr', '!'); w.title = 'Falta instalar: ' + uniq(m.map(fxName)).join(', '); b.appendChild(w); }
+      var s = el('span', 'st' + (favs[it.id] ? ' on' : ''), favs[it.id] ? '★' : '☆'); s.title = favs[it.id] ? 'Tirar dos favoritos' : 'Guardar nos favoritos';
+      s.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (favs[it.id]) { delete favs[it.id]; } else { favs[it.id] = true; }
+        store.set('favs', Object.keys(favs)); renderTabs(); renderList();
+      });
+      s.addEventListener('dblclick', function (ev) { ev.stopPropagation(); });
+      b.appendChild(s);
+      b.title = it.label + '  (duplo clique aplica)';
+      b.addEventListener('click', function () { select(it.id); });
+      b.addEventListener('dblclick', function () { select(it.id); apply(); });
+      b.addEventListener('mouseenter', function () { if (opt.hover) { showPreview(it); } });
+      box.appendChild(b);
+    });
+  }
+  $('list').addEventListener('mouseleave', function () { if (opt.hover) { showPreview(byId[selId] || null); } });
+  function select(id) {
+    selId = id; store.set('sel', id);
+    each(document.querySelectorAll('.item'), function (b) { b.classList.toggle('sel', b.getAttribute('data-id') === id); });
+    showPreview(byId[id] || null);
+    $('bGo').textContent = byId[id] && byId[id].overlay ? 'ADICIONAR OVERLAY' : 'APLICAR';
+    $('swAdj').style.visibility = byId[id] && byId[id].overlay ? 'hidden' : '';
+  }
+
+  // ------------------------------------------------------------ previa
+  var pvFor = null;
+  function fileUrl(p) { return 'file:///' + encodeURI(p).replace(/#/g, '%23').replace(/\?/g, '%3F'); }
+  function showPreview(it) {
+    if (it === pvFor) { return; } pvFor = it;
+    var img = $('pvImg'), vid = $('pvVid'), emp = $('pvEmpty'), meta = $('pvMeta');
+    img.style.display = 'none'; vid.style.display = 'none'; try { vid.pause(); } catch (e) {} vid.removeAttribute('src');
+    emp.style.display = ''; emp.textContent = it ? 'Sem prévia para este preset' : 'Escolha um preset para ver a prévia';
+    if (!it) { $('pvName').innerHTML = '&nbsp;'; meta.textContent = ''; meta.className = ''; return; }
+    $('pvName').textContent = it.label;
+    var m = uniq(missOf(it).map(fxName));
+    if (m.length) { meta.className = 'warn'; meta.textContent = 'Falta instalar: ' + m.join(', '); }
+    else { meta.className = ''; meta.textContent = catLabel(it.cat) + (it.overlay ? ' · arquivo .' + it.ext : (it.fx.length ? ' · ' + it.fx.length + (it.fx.length === 1 ? ' efeito' : ' efeitos') : '')); }
+    var src = '', video = false;
+    if (!it.overlay) { src = 'img/' + encodeURIComponent(it.name) + '.gif'; }
+    else if (it.sibGif) { src = fileUrl(it.sibGif); }
+    else if (/^(png|jpe?g|gif|webp)$/.test(it.ext)) { src = fileUrl(it.path); }
+    else if (/^(mp4|m4v|webm)$/.test(it.ext)) { src = fileUrl(it.path); video = true; }
+    if (!src) { return; }
+    if (video) {
+      vid.onloadeddata = function () { if (pvFor === it) { emp.style.display = 'none'; vid.style.display = 'block'; var p = vid.play(); if (p && p.catch) { p.catch(function () {}); } } };
+      vid.src = src;
+    } else {
+      img.onload = function () { if (pvFor === it) { emp.style.display = 'none'; img.style.display = 'block'; } };
+      img.onerror = function () { if (pvFor === it) { img.style.display = 'none'; } };
+      img.src = src;
+    }
+  }
+
+  // ------------------------------------------------------------ aplicar
+  function convertNewer(it) {   // preset salvo num After mais novo: troca a versao do cabecalho
+    try {
+      var r = FS.readFile(it.path, window.cep.encoding.Base64); if (r.err !== 0) { return ''; }
+      var bin = atob(r.data);
+      if (bin.substr(0, 4) !== 'RIFX' || bin.substr(12, 4) !== 'head' || bin.length < 40) { return ''; }
+      bin = bin.substr(0, 27) + String.fromCharCode(0x5E) + bin.substr(28, 3) + String.fromCharCode(4) + bin.substr(32);
+      var data = btoa(bin);
+      if (FS.writeFile(it.path, data, window.cep.encoding.Base64).err === 0) { return it.path; }
+      var dir = sysPath('userData') + '/chavebaixa-vfx-convertidos'; FS.makedir(dir);
+      var out = dir + '/' + it.cat + '__' + it.name + '.ffx';
+      return FS.writeFile(out, data, window.cep.encoding.Base64).err === 0 ? out : '';
+    } catch (e) { return ''; }
+  }
+  var busy = false;
+  function apply() {
+    var it = byId[selId];
+    if (!it) { toast('Escolha um preset na lista primeiro.'); return; }
+    if (busy) { return; }
+    busy = true; var b = $('bGo'); b.disabled = true;
+    var done = function (res) {
+      busy = false; b.disabled = false;
+      var msg = res.msg || (res.ok ? 'Pronto.' : 'Algo deu errado.');
+      var m = it.overlay ? [] : uniq(missOf(it).map(fxName));
+      if (res.ok && m.length) { msg += '\nAtenção: falta instalar ' + m.join(', ') + '. Esses efeitos ficam sem funcionar até instalar.'; }
+      toast(msg, res.ok ? 0 : 12000);
+      if (res.ok) { celebrate(); }
+      ping();
+    };
+    if (it.overlay) { host('overlay', [it.path]).then(done); return; }
+    var mode = opt.adj ? 'adj' : 'sel';
+    host('apply', [it.path, mode, it.label]).then(function (res) {
+      if (res.newer && FS) {
+        var p = convertNewer(it);
+        if (p) { return host('apply', [p, mode, it.label]).then(function (r2) { if (r2.ok) { r2.msg += '\n(Preset de After mais novo: converti para funcionar aqui.)'; } done(r2); }); }
+        res.msg = 'Este preset foi salvo num After mais novo e não consegui converter.';
+      }
+      done(res);
+    });
+  }
+  $('bGo').addEventListener('click', apply);
+  document.addEventListener('keydown', function (e) {
+    var t = e.target.tagName;
+    if (e.keyCode === 27 && $('drawer').classList.contains('show')) { $('drawer').classList.remove('show'); return; }
+    if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || $('drawer').classList.contains('show')) { return; }
+    if (e.keyCode === 13) { apply(); return; }
+    if (e.keyCode !== 38 && e.keyCode !== 40) { return; }
+    var items = currentItems(), i, cur = -1; if (!items.length) { return; }
+    for (i = 0; i < items.length; i++) { if (items[i].id === selId) { cur = i; } }
+    cur = Math.max(0, Math.min(items.length - 1, cur + (e.keyCode === 40 ? 1 : -1)));
+    select(items[cur].id); e.preventDefault();
+    var node = document.querySelector('.item.sel'); if (node && node.scrollIntoView) { node.scrollIntoView({ block: 'nearest' }); }
+  });
+
+  // ------------------------------------------------------------ busca
+  $('eSearch').addEventListener('input', function () {
+    query = this.value.trim(); $('bClear').style.display = query ? 'block' : 'none'; renderTabs(); renderList();
+  });
+  $('bClear').addEventListener('click', function () { query = ''; $('eSearch').value = ''; this.style.display = 'none'; renderTabs(); renderList(); $('eSearch').focus(); });
+
+  // ------------------------------------------------------------ plugins que faltam
+  function checkMissing() {
+    var all = {}; Object.keys(FX).forEach(function (k) { FX[k].forEach(function (n) { all[n] = true; }); });
+    var names = Object.keys(all);
+    if (!names.length) { return Promise.resolve(); }
+    return host('missing', [names.join('\n')]).then(function (r) {
+      if (!r || !r.ok) { return; }
+      missing = {}; missKnown = true; r.missing.forEach(function (n) { missing[n] = true; });
+      var n = 0; Object.keys(byId).forEach(function (id) { if (missOf(byId[id]).length) { n++; } });
+      var list = uniq(r.missing.map(fxName)).sort();
+      $('missNote').textContent = list.length
+        ? n + ' presets usam plugins que não estão instalados neste After (marcados com !). Eles aplicam, mas esses efeitos ficam sem funcionar: ' + list.join(', ') + '.'
+        : 'Todos os plugins usados pelos presets estão instalados.';
+      renderList(); pvFor = undefined; showPreview(byId[selId] || null);
+    });
+  }
+
+  // ------------------------------------------------------------ painel Personalizar
+  $('bGear').addEventListener('click', function () { $('drawer').classList.add('show'); });
+  $('bClose').addEventListener('click', function () { $('drawer').classList.remove('show'); });
+  function renderCatSw() {
+    var box = $('catSw'); box.innerHTML = '';
+    cats.forEach(function (c) {
+      var l = el('label', 'sw'), inp = document.createElement('input'); inp.type = 'checkbox'; inp.checked = !hidden[c.id];
+      inp.addEventListener('change', function () {
+        if (inp.checked) { delete hidden[c.id]; } else { hidden[c.id] = true; }
+        store.set('hiddenCats', Object.keys(hidden)); renderTabs(); renderList();
+      });
+      l.appendChild(inp); l.appendChild(el('i')); l.appendChild(el('span', '', c.label + ' (' + c.items.length + ')')); box.appendChild(l);
+    });
+  }
+  function bindOpt(id, key) {
+    var e = $(id); e.checked = !!opt[key];
+    e.addEventListener('change', function () { opt[key] = e.checked; store.set(key, e.checked); renderList(); });
+  }
+  bindOpt('cHover', 'hover'); bindOpt('cHideMiss', 'hideMiss'); bindOpt('cAdj', 'adj');
+  function openFolder(sub) {
+    if (!CEP) { toast('Só funciona dentro do After Effects.'); return; }
+    host('openFolder', [sysPath('extension') + '/preset' + (sub || '')]).then(function (r) { if (!r.ok) { toast('Não consegui abrir a pasta.\n' + (r.msg || '')); } });
+  }
+  $('bFolder').addEventListener('click', function () { openFolder(''); });
+  function reload() { scan(); if (!byId[selId]) { selId = ''; } renderTabs(); renderList(); renderCatSw(); pvFor = undefined; select(selId); }
+  $('bRescan').addEventListener('click', function () { reload(); checkMissing(); toast('Lista recarregada: ' + Object.keys(byId).length + ' itens.'); });
+
+  // ------------------------------------------------------------ fundo animado
+  var BG_W = 460, BG_H = 818, BG_TOP = true, bgEl = $('bg'), scene = $('scene'), embers = $('embers');
+  function layoutScene() {   // a imagem sempre cobre o painel
+    var vw = window.innerWidth, vh = window.innerHeight, k = Math.max(vw / BG_W, vh / BG_H) * 1.05, w = BG_W * k, h = BG_H * k;
+    scene.style.top = (BG_TOP ? Math.min(0, (vh - h) * 0.18) : (vh - h) / 2) + 'px';
+    scene.style.width = w + 'px'; scene.style.height = h + 'px'; scene.style.left = ((vw - w) / 2) + 'px';
+  }
+  var DEF = { bg: ART_SRC ? 'art' : 'plain', bw: true, glow: true, embers: true, veil: 66, accent: '#f02b36' };
+  var look = { bg: store.get('bg', DEF.bg), bw: store.get('bw', DEF.bw), glow: store.get('glow', DEF.glow), embers: store.get('embers', DEF.embers), veil: store.get('veil', DEF.veil), accent: store.get('accent', DEF.accent) };
+  var photo = store.get('photo', ''), cache = {};
+  function loadImg(src) { return new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = src; }); }
+  function clamp(v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
+  function processImg(img, bw) {   // P&B com contraste e o mapa do glow
+    var W = Math.min(720, img.naturalWidth), H = Math.round(img.naturalHeight * W / img.naturalWidth);
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var x = c.getContext('2d'); x.drawImage(img, 0, 0, W, H);
+    var d = x.getImageData(0, 0, W, H), p = d.data, gd = x.createImageData(W, H), g = gd.data, i, r, gg, b, l;
+    for (i = 0; i < p.length; i += 4) {
+      r = p[i]; gg = p[i + 1]; b = p[i + 2];
+      if (bw) { l = 0.2126 * r + 0.7152 * gg + 0.0722 * b; l = clamp((l - 128) * 1.6 + 130); r = gg = b = l; p[i] = p[i + 1] = p[i + 2] = l; }
+      g[i] = clamp(((r - 128) * 2.6 + 128) * 0.72); g[i + 1] = clamp(((gg - 128) * 2.6 + 128) * 0.72); g[i + 2] = clamp(((b - 128) * 2.6 + 128) * 0.72); g[i + 3] = 255;
+    }
+    x.putImageData(d, 0, 0);
+    var art = c.toDataURL('image/jpeg', 0.88);
+    x.putImageData(gd, 0, 0);
+    var t = document.createElement('canvas'); t.width = Math.max(8, Math.round(W / 12)); t.height = Math.max(8, Math.round(H / 12));
+    t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+    var o = document.createElement('canvas'); o.width = Math.round(W / 3); o.height = Math.round(H / 3);
+    var ox = o.getContext('2d'); ox.imageSmoothingEnabled = true; ox.drawImage(t, 0, 0, o.width, o.height);
+    return { art: art, glow: o.toDataURL('image/jpeg', 0.8), w: W, h: H };
+  }
+  function getProcessed(which) {
+    var src = which === 'photo' ? photo : ART_SRC, key = which + (look.bw ? '-pb' : '-cor') + (which === 'photo' ? photo.length : '');
+    if (cache[key]) { return Promise.resolve(cache[key]); }
+    return loadImg(src).then(function (img) { cache[key] = processImg(img, look.bw); return cache[key]; });
+  }
+  var bgRun = 0;
+  function applyBg() {
+    var mode = look.bg, run = ++bgRun;
+    if (mode === 'photo' && !photo) { mode = 'art'; }
+    if (mode === 'art' && !ART_SRC) { mode = 'plain'; }
+    bgEl.classList.toggle('plain', mode === 'plain');
+    bgEl.classList.toggle('noglow', !look.glow);
+    bgEl.classList.toggle('noembers', !look.embers);
+    document.documentElement.style.setProperty('--veil', (look.veil / 100).toFixed(2));
+    each(document.querySelectorAll('.bgopt'), function (o) { o.classList.toggle('sel', o.getAttribute('data-bg') === mode); });
+    $('cBW').checked = look.bw; $('cGlow').checked = look.glow; $('cEmbers').checked = look.embers;
+    $('rVeil').value = look.veil; $('rVeilT').textContent = look.veil + '%';
+    $('bPhotoDel').disabled = !photo;
+    $('thPhoto').classList.toggle('empty', !photo);
+    $('thPlain').style.background = 'radial-gradient(ellipse 120% 80% at 50% -10%, rgba(' + hexRgb(look.accent).join(',') + ', .55), rgba(0,0,0,0) 72%), #0b0b0d';
+    if (ART_SRC) { getProcessed('art').then(function (r) { $('thArt').style.backgroundImage = 'url(' + r.art + ')'; }).catch(function () {}); }
+    if (photo) { getProcessed('photo').then(function (r) { $('thPhoto').style.backgroundImage = 'url(' + r.art + ')'; }).catch(function () {}); } else { $('thPhoto').style.backgroundImage = ''; }
+    if (mode === 'plain') { return Promise.resolve(); }
+    return getProcessed(mode).then(function (r) {
+      if (run !== bgRun) { return; }
+      BG_W = r.w; BG_H = r.h; BG_TOP = mode === 'art';
+      document.querySelector('.art').style.backgroundImage = 'url(' + r.art + ')';
+      document.querySelector('.bloom').style.backgroundImage = 'url(' + r.glow + ')';
+      layoutScene();
+    }).catch(function () { toast('Não consegui carregar essa imagem de fundo.'); });
+  }
+  function setLook(k, v) { look[k] = v; store.set(k, v); applyBg(); }
+  each(document.querySelectorAll('.bgopt'), function (o) {
+    o.addEventListener('click', function () {
+      var m = o.getAttribute('data-bg');
+      if (m === 'photo' && !photo) { $('photoFile').value = ''; $('photoFile').click(); return; }
+      setLook('bg', m);
+    });
+  });
+  $('cBW').addEventListener('change', function () { setLook('bw', this.checked); });
+  $('cGlow').addEventListener('change', function () { setLook('glow', this.checked); });
+  $('cEmbers').addEventListener('change', function () { setLook('embers', this.checked); });
+  $('rVeil').addEventListener('input', function () {
+    look.veil = parseInt(this.value, 10); $('rVeilT').textContent = look.veil + '%';
+    document.documentElement.style.setProperty('--veil', (look.veil / 100).toFixed(2));
+  });
+  $('rVeil').addEventListener('change', function () { store.set('veil', look.veil); });
+  $('bPhoto').addEventListener('click', function () { $('photoFile').value = ''; $('photoFile').click(); });
+  $('photoFile').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (!f) { return; }
+    if (!/^image\//.test(f.type)) { toast('Escolha um arquivo de imagem (JPG, PNG, WEBP).'); return; }
+    var fr = new FileReader();
+    fr.onload = function () {
+      loadImg(String(fr.result)).then(function (img) {
+        var M = 1100, k = Math.min(1, M / Math.max(img.naturalWidth, img.naturalHeight));
+        var c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        var data = c.toDataURL('image/jpeg', 0.86);
+        try { localStorage.setItem('xrf.photo', JSON.stringify(data)); }
+        catch (e) { toast('Essa foto é grande demais para guardar. Tente uma menor.'); return; }
+        photo = data; cache = {};
+        setLook('bg', 'photo');
+        toast('Foto aplicada no fundo.');
+      }).catch(function () { toast('Não consegui abrir essa imagem.'); });
+    };
+    fr.readAsDataURL(f);
+  });
+  $('bPhotoDel').addEventListener('click', function () {
+    photo = ''; cache = {}; try { localStorage.removeItem('xrf.photo'); } catch (e) {}
+    if (look.bg === 'photo') { look.bg = DEF.bg; store.set('bg', DEF.bg); }
+    applyBg(); toast('Foto apagada.');
+  });
+
+  var SWATCHES = ['#f02b36', '#ff3d8b', '#b05cff', '#3b7bff', '#19c6d6', '#2fd36b', '#ffc21a', '#ff7a1a', '#f2f2f2'];
+  function hexRgb(h) { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+  function rgbHex(a) { return '#' + a.map(function (v) { return ('0' + Math.round(clamp(v)).toString(16)).slice(-2); }).join(''); }
+  function mixRgb(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+  function applyAccent(hex, save) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) { return false; }
+    hex = hex.toLowerCase();
+    var c = hexRgb(hex), lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255, s = document.documentElement.style;
+    s.setProperty('--acc', hex);
+    s.setProperty('--acc-hi', rgbHex(mixRgb(c, [255, 255, 255], 0.2)));
+    s.setProperty('--acc-lo', rgbHex(mixRgb(c, [0, 0, 0], 0.28)));
+    s.setProperty('--acc-rgb', c.join(', '));
+    s.setProperty('--on-acc', lum > 0.6 ? '#111' : '#fff');
+    look.accent = hex; if (save) { store.set('accent', hex); }
+    $('eHex').value = hex;
+    each(document.querySelectorAll('.swatch'), function (w) { w.classList.toggle('sel', w.getAttribute('data-c') === hex); });
+    $('thPlain').style.background = 'radial-gradient(ellipse 120% 80% at 50% -10%, rgba(' + c.join(',') + ', .55), rgba(0,0,0,0) 72%), #0b0b0d';
+    return true;
+  }
+  SWATCHES.forEach(function (h) {
+    var w = el('i', 'swatch'); w.style.background = h; w.setAttribute('data-c', h); w.title = h;
+    w.addEventListener('click', function () { applyAccent(h, true); });
+    $('swatches').appendChild(w);
+  });
+  (function () {
+    var w = el('label', 'swatch custom'); w.title = 'Outra cor';
+    var inp = document.createElement('input'); inp.type = 'color'; inp.value = look.accent;
+    inp.addEventListener('input', function () { applyAccent(inp.value, false); });
+    inp.addEventListener('change', function () { applyAccent(inp.value, true); });
+    w.appendChild(inp); $('swatches').appendChild(w);
+  })();
+  $('eHex').addEventListener('change', function () {
+    var v = this.value.trim(); if (v.charAt(0) !== '#') { v = '#' + v; }
+    if (/^#[0-9a-f]{3}$/i.test(v)) { v = '#' + v.charAt(1) + v.charAt(1) + v.charAt(2) + v.charAt(2) + v.charAt(3) + v.charAt(3); }
+    if (!applyAccent(v, true)) { toast('Use um código de cor como #f02b36.'); this.value = look.accent; }
+  });
+  $('bReset').addEventListener('click', function () {
+    ['bg', 'bw', 'glow', 'embers', 'veil'].forEach(function (k) { look[k] = DEF[k]; store.set(k, DEF[k]); });
+    applyAccent(DEF.accent, true); applyBg(); toast('Aparência padrão restaurada. A foto enviada continua guardada.');
+  });
+  applyAccent(/^#[0-9a-f]{6}$/i.test(look.accent) ? look.accent : DEF.accent, false);
+  applyBg();
+
+  function ember(burst) {
+    var e = el('i', 'ember' + (burst ? ' burst' : ''));
+    e.style.left = (burst ? 30 + Math.random() * 40 : Math.random() * 100) + '%';
+    e.style.setProperty('--sway', Math.round((Math.random() - 0.5) * (burst ? 220 : 70)) + 'px');
+    if (burst) { e.style.bottom = '90px'; e.style.setProperty('--up', -Math.round(120 + Math.random() * 260) + 'px'); setTimeout(function () { if (e.parentNode) { e.parentNode.removeChild(e); } }, 1600); }
+    else { var d = 7 + Math.random() * 9; e.style.animationDuration = d.toFixed(1) + 's'; e.style.animationDelay = (-Math.random() * d).toFixed(1) + 's'; var s = 2 + Math.random() * 3; e.style.width = e.style.height = s.toFixed(1) + 'px'; }
+    embers.appendChild(e);
+  }
+  for (var eN = 0; eN < 14; eN++) { ember(false); }
+  function celebrate() {   // preset aplicado: o glow acelera e sobem faiscas
+    if (document.body.classList.contains('noanim') || !look.embers) { return; }
+    bgEl.classList.add('hot'); setTimeout(function () { bgEl.classList.remove('hot'); }, 1700);
+    for (var i = 0; i < 18; i++) { ember(true); }
+  }
+  var reduce = false; try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (eM) {}
+  function setAnim(on) { document.body.classList.toggle('noanim', !on); $('cAnim').checked = on; }
+  setAnim(store.get('anim', !reduce));
+  $('cAnim').addEventListener('change', function () { store.set('anim', this.checked); setAnim(this.checked); });
+  var pxT = 0;
+  document.addEventListener('mousemove', function (e) {   // o fundo acompanha o mouse de leve
+    var now = Date.now(); if (now - pxT < 60 || document.body.classList.contains('noanim')) { return; } pxT = now;
+    document.documentElement.style.setProperty('--px', ((e.clientX / window.innerWidth) - 0.5).toFixed(3));
+    document.documentElement.style.setProperty('--py', ((e.clientY / window.innerHeight) - 0.5).toFixed(3));
+  });
+  window.addEventListener('resize', layoutScene); layoutScene();
+
+  // ------------------------------------------------------------ atualizacao pelo GitHub
+  function newer(a, b) {
+    var x = String(a).split('.'), y = String(b).split('.');
+    for (var i = 0; i < Math.max(x.length, y.length); i++) { var p = parseInt(x[i] || '0', 10), q = parseInt(y[i] || '0', 10); if (p !== q) { return p > q; } }
+    return false;
+  }
+  function getText(file) {
+    return fetch(UPDATE_URL + file + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); });
+  }
+  function localPack() {
+    if (!FS) { return 0; }
+    var r = FS.readFile(sysPath('extension') + '/pack.txt'); return r.err === 0 ? (parseInt(r.data, 10) || 0) : 0;
+  }
+  function checkPack(manual) {   // presets e previas vem num pacote separado, baixado pelo instalador
+    return getText('pack.txt').then(function (t) {
+      var n = parseInt(t, 10) || 0;
+      if (FS && n > localPack()) { toast('Saiu um pacote novo de presets.\nRode o Instalar-chavebaixa-vfx.bat de novo para baixar.', 12000); }
+      else if (manual) { toast('Você já está na versão mais nova (v' + VERSION + ').\nSe acabei de publicar algo, o GitHub leva até 5 minutos.'); }
+    });
+  }
+  function checkUpdate(manual) {
+    return getText('version.txt').then(function (t) {
+      var v = t.trim();
+      if (!/^\d+(\.\d+)*$/.test(v)) { throw new Error('resposta estranha'); }
+      if (!newer(v, VERSION)) { return checkPack(manual); }
+      if (!FS) { if (manual) { toast('Existe a v' + v + ', mas fora do After não dá para instalar.'); } return; }
+      var tried = null; try { tried = sessionStorage.getItem('xrf.tried'); } catch (e) {}
+      if (tried === v && !manual) { return; }
+      try { sessionStorage.setItem('xrf.tried', v); } catch (e2) {}
+      return Promise.all([getText('painel/index.html'), getText('painel/jsx/main.jsx'), getText('painel/fx-index.js')]).then(function (files) {
+        if (files[0].indexOf('chavebaixa-vfx-panel v' + v + ' ') < 0 || files[1].indexOf('XRF.VERSION = "' + v + '"') < 0 || files[2].indexOf('window.XRF_FX') < 0) {
+          if (manual) { toast('Achei a v' + v + ', mas os arquivos ainda não chegaram inteiros no GitHub.\nTente de novo em alguns minutos.'); }
+          return;
+        }
+        var p = sysPath('extension'), a = FS.writeFile(p + '/jsx/main.jsx', files[1]), b = FS.writeFile(p + '/fx-index.js', files[2]), c = FS.writeFile(p + '/index.html', files[0]);
+        if (a.err !== 0 || b.err !== 0 || c.err !== 0) { toast('Baixei a v' + v + ', mas não consegui gravar na pasta do painel.'); return; }
+        toast('Atualizando para a v' + v + '…', 2500);
+        setTimeout(function () { location.reload(); }, 900);
+      });
+    }).catch(function () { if (manual) { toast('Não consegui falar com o GitHub.\nConfira a internet.'); } });
+  }
+  $('bUpd').addEventListener('click', function () { checkUpdate(true); });
+  $('bUpd').textContent = 'Procurar atualização  (v' + VERSION + ')';
+
+  // ------------------------------------------------------------ inicio
+  $('ver').textContent = 'v' + VERSION;
+  reload();
+  window.addEventListener('focus', function () { ping(); });
+  document.addEventListener('mouseenter', function () { ping(); });
+  loadHost().then(function (ok) { if (ok) { ping(); checkMissing(); } checkUpdate(false); });
+})();
+</script>
+</body>
+</html>
