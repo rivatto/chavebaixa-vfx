@@ -1,6 +1,6 @@
 // chavebaixa VFX 2.0 - lado do After Effects (ExtendScript / ES3)
 var XRF = XRF || {};
-XRF.VERSION = "2.1.0";
+XRF.VERSION = "2.1.1";
 
 (function () {
     function q(s) {
@@ -26,8 +26,8 @@ XRF.VERSION = "2.1.0";
     XRF.ping = function () {
         try {
             var c = activeComp();
-            if (!c) { return '{"ok":true,"comp":"","sel":0,"version":' + q(XRF.VERSION) + '}'; }
-            return '{"ok":true,"comp":' + q(c.name) + ',"sel":' + c.selectedLayers.length + ',"version":' + q(XRF.VERSION) + '}';
+            if (!c) { return '{"ok":true,"comp":"","sel":0,"ae":' + (parseFloat(app.version) || 0) + ',"version":' + q(XRF.VERSION) + '}'; }
+            return '{"ok":true,"comp":' + q(c.name) + ',"sel":' + c.selectedLayers.length + ',"ae":' + (parseFloat(app.version) || 0) + ',"version":' + q(XRF.VERSION) + '}';
         } catch (e) { return fail(errText(e)); }
     };
 
@@ -48,13 +48,13 @@ XRF.VERSION = "2.1.0";
         if (!comp) { return fail('Abra uma composi\u00e7\u00e3o primeiro (clique na timeline dela).'); }
         var file = new File(path);
         if (!file.exists) { return fail('N\u00e3o achei o arquivo do preset:\n' + path); }
-        var sel = comp.selectedLayers, layers = [], i, done = 0, undo = false;
+        var sel = comp.selectedLayers, layers = [], i, done = 0, undo = false, adj = null;
         for (i = 0; i < sel.length; i++) { layers.push(sel[i]); }
         if (mode !== 'adj' && !layers.length) { return fail('Selecione pelo menos uma camada na timeline.'); }
         try {
             app.beginUndoGroup('chavebaixa VFX: ' + (label || 'preset')); undo = true;
             if (mode === 'adj') {
-                var adj = comp.layers.addSolid([1, 1, 1], 'FX ' + (label || 'chavebaixa VFX'), comp.width, comp.height, comp.pixelAspect, comp.duration);
+                adj = comp.layers.addSolid([1, 1, 1], 'FX ' + (label || 'chavebaixa VFX'), comp.width, comp.height, comp.pixelAspect, comp.duration);
                 adj.adjustmentLayer = true;
                 if (layers.length) {
                     var top = layers[0], a = layers[0].inPoint, b = layers[0].outPoint;
@@ -81,6 +81,8 @@ XRF.VERSION = "2.1.0";
             app.endUndoGroup();
             return ok(mode === 'adj' ? 'Aplicado numa camada de ajuste nova.' : ('Aplicado em ' + done + (done === 1 ? ' camada.' : ' camadas.')));
         } catch (e) {
+            // a camada de ajuste criada para um preset que falhou nao pode sobrar na comp
+            if (adj) { try { var src = adj.source; adj.remove(); if (src && src.usedIn.length === 0) { src.remove(); } } catch (e3) {} for (i = 0; i < layers.length; i++) { try { layers[i].selected = true; } catch (e4) {} } }
             if (undo) { try { app.endUndoGroup(); } catch (e2) {} }
             if (isNewer(e)) { return fail('Este preset foi salvo num After mais novo.', '"newer":true'); }
             return fail('O After recusou este preset:\n' + errText(e));
