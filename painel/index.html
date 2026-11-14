@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chavebaixa VFX</title>
-<!-- chavebaixa-vfx-panel v2.1.0 -->
+<!-- chavebaixa-vfx-panel v2.1.1 -->
 <style>
   :root {
     --bg: #09090b; --card: rgba(18, 18, 21, .76); --card2: rgba(44, 44, 50, .86); --line: rgba(255, 255, 255, .16); --txt: #f4f4f5; --dim: #b4b4bb;
@@ -281,11 +281,11 @@
 <script>
 (function () {
   'use strict';
-  var VERSION = '2.1.0';
+  var VERSION = '2.1.1';
   var UPDATE_URL = 'https://raw.githubusercontent.com/rivatto/chavebaixa-vfx/main/';
   var CEP = window.__adobe_cep__ || null;
   var FS = (CEP && window.cep && window.cep.fs) ? window.cep.fs : null;
-  var FX = window.XRF_FX || {}, FXN = window.XRF_FX_NAMES || {}, ART_SRC = window.XRF_ART || '';
+  var FX = window.XRF_FX || {}, FXN = window.XRF_FX_NAMES || {}, CONV = window.XRF_CONV || {}, aeMajor = 0, ART_SRC = window.XRF_ART || '';
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) { e.className = cls; } if (text !== undefined) { e.textContent = text; } return e; }
   function each(list, fn) { Array.prototype.forEach.call(list, fn); }
@@ -335,6 +335,7 @@
   }
   function ping() {
     return host('ping').then(function (r) {
+      if (r && r.ae) { aeMajor = r.ae; }
       var okc = r && r.ok && r.comp;
       $('compline').classList.toggle('ok', !!okc);
       var t = $('compT'); t.textContent = '';
@@ -499,17 +500,25 @@
   }
 
   // ------------------------------------------------------------ aplicar
-  function convertNewer(it) {   // preset salvo num After mais novo: troca a versao do cabecalho
+  // troca a versao gravada no cabecalho do .ffx; devolve o caminho do arquivo pronto (ou '' se nao deu)
+  var hdrDone = {};
+  function setHeader(it, maj, min) {
+    var key = it.id + ':' + maj + '.' + min;
+    if (hdrDone[key]) { return hdrDone[key]; }
     try {
       var r = FS.readFile(it.path, window.cep.encoding.Base64); if (r.err !== 0) { return ''; }
-      var bin = atob(r.data);
+      var bin = atob(r.data), out = it.path;
       if (bin.substr(0, 4) !== 'RIFX' || bin.substr(12, 4) !== 'head' || bin.length < 40) { return ''; }
-      bin = bin.substr(0, 27) + String.fromCharCode(0x5E) + bin.substr(28, 3) + String.fromCharCode(4) + bin.substr(32);
-      var data = btoa(bin);
-      if (FS.writeFile(it.path, data, window.cep.encoding.Base64).err === 0) { return it.path; }
-      var dir = sysPath('userData') + '/chavebaixa-vfx-convertidos'; FS.makedir(dir);
-      var out = dir + '/' + it.cat + '__' + it.name + '.ffx';
-      return FS.writeFile(out, data, window.cep.encoding.Base64).err === 0 ? out : '';
+      if (bin.charCodeAt(27) !== maj || bin.charCodeAt(31) !== min) {
+        var data = btoa(bin.substr(0, 27) + String.fromCharCode(maj) + bin.substr(28, 3) + String.fromCharCode(min) + bin.substr(32));
+        if (FS.writeFile(it.path, data, window.cep.encoding.Base64).err !== 0) {
+          var dir = sysPath('userData') + '/chavebaixa-vfx-convertidos'; FS.makedir(dir);
+          out = dir + '/' + it.cat + '__' + it.name + '__' + maj + '.ffx';
+          if (FS.writeFile(out, data, window.cep.encoding.Base64).err !== 0) { return ''; }
+        }
+      }
+      hdrDone = {}; hdrDone[key] = out;
+      return out;
     } catch (e) { return ''; }
   }
   var busy = false;
@@ -528,11 +537,16 @@
       ping();
     };
     if (it.overlay) { host('overlay', [it.path]).then(done); return; }
-    var mode = opt.adj ? 'adj' : 'sel';
-    host('apply', [it.path, mode, it.label]).then(function (res) {
+    var mode = opt.adj ? 'adj' : 'sel', path = it.path, restored = false, orig = CONV[it.id];
+    // preset que vai no pacote rebaixado para After antigo: num After novo volta a ser o arquivo original
+    if (orig && FS && aeMajor >= 24 && store.get('restoreFail', 0) < aeMajor) {
+      var rp = setHeader(it, orig[0], orig[1]); if (rp) { path = rp; restored = true; }
+    }
+    host('apply', [path, mode, it.label]).then(function (res) {
       if (res.newer && FS) {
-        var p = convertNewer(it);
-        if (p) { return host('apply', [p, mode, it.label]).then(function (r2) { if (r2.ok) { r2.msg += '\n(Preset de After mais novo: converti para funcionar aqui.)'; } done(r2); }); }
+        if (restored) { store.set('restoreFail', aeMajor); }   // este After nao le o original: daqui em diante usa o rebaixado
+        var p = setHeader(it, 0x5E, 4);
+        if (p) { return host('apply', [p, mode, it.label]).then(function (r2) { if (r2.ok && !restored) { r2.msg += '\n(Preset de After mais novo: converti para funcionar aqui.)'; } done(r2); }); }
         res.msg = 'Este preset foi salvo num After mais novo e não consegui converter.';
       }
       done(res);
