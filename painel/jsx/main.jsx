@@ -1,6 +1,6 @@
 // chavebaixa VFX 2.0 - lado do After Effects (ExtendScript / ES3)
 var XRF = XRF || {};
-XRF.VERSION = "2.1.1";
+XRF.VERSION = "2.1.2";
 
 (function () {
     function q(s) {
