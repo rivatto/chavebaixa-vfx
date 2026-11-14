@@ -51,7 +51,7 @@ const head = [
   'if exist "%EXT%\\pack.txt" set /p HAVE=<"%EXT%\\pack.txt"',
   'if "%HAVE%"=="%PACK%" if exist "%EXT%\\preset\\cc" goto packok',
   'echo.',
-  'echo Baixando os presets e as previas (uns 760 MB, pode demorar)...',
+  'echo Baixando os presets e as previas (uns 960 MB, pode demorar)...',
   'if exist "%ZIP%" del "%ZIP%" >nul 2>&1',
   'curl.exe -L --fail --retry 3 -o "%ZIP%" "%PACKURL%"',
   'if errorlevel 1 powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=\'Tls12\'; (New-Object Net.WebClient).DownloadFile($env:PACKURL,$env:ZIP)"',
