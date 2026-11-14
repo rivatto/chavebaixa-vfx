@@ -5,7 +5,7 @@ Painel de presets para o After Effects: color, shake, mix fx, liquid, text e CRT
 ## Instalar
 
 1. Baixe o arquivo **Instalar-chavebaixa-vfx.bat** deste repositório e dê dois cliques nele.
-2. Espere baixar os presets e as prévias (uns 760 MB).
+2. Espere baixar os presets e as prévias (uns 960 MB).
 3. Feche o After Effects e abra de novo.
 4. Abra em **Window > Extensions > chavebaixa VFX**.
 
