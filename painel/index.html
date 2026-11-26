@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chavebaixa VFX</title>
-<!-- chavebaixa-vfx-panel v2.1.2 -->
+<!-- chavebaixa-vfx-panel v2.1.3 -->
 <style>
   :root {
     --bg: #09090b; --card: rgba(18, 18, 21, .76); --card2: rgba(44, 44, 50, .86); --line: rgba(255, 255, 255, .16); --txt: #f4f4f5; --dim: #b4b4bb;
@@ -258,6 +258,7 @@
     <h4>Opções</h4>
     <div class="wrap">
       <label class="sw"><input type="checkbox" id="cHover"><i></i><span>Prévia ao passar o mouse</span></label>
+      <label class="sw"><input type="checkbox" id="cCenter"><i></i><span>Centralizar o eixo dos efeitos ao aplicar</span></label>
       <label class="sw"><input type="checkbox" id="cHideMiss"><i></i><span>Esconder presets com plugin faltando</span></label>
       <label class="sw"><input type="checkbox" id="cAnim"><i></i><span>Animações do painel</span></label>
     </div>
@@ -281,7 +282,7 @@
 <script>
 (function () {
   'use strict';
-  var VERSION = '2.1.2';
+  var VERSION = '2.1.3';
   var UPDATE_URL = 'https://raw.githubusercontent.com/rivatto/chavebaixa-vfx/main/';
   var CEP = window.__adobe_cep__ || null;
   var FS = (CEP && window.cep && window.cep.fs) ? window.cep.fs : null;
@@ -291,10 +292,41 @@
   function each(list, fn) { Array.prototype.forEach.call(list, fn); }
 
   // ------------------------------------------------------------ preferencias
-  var store = {
-    get: function (k, d) { try { var v = localStorage.getItem('xrf.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set: function (k, v) { try { localStorage.setItem('xrf.' + k, JSON.stringify(v)); } catch (e) {} }
-  };
+  // Ficam num arquivo em %APPDATA%\chavebaixa-vfx. O localStorage do CEP mora na pasta Temp, que o Windows
+  // (Sensor de Armazenamento) e programas de limpeza apagam sozinhos: ele so fica como copia de reserva.
+  var store = (function () {
+    var dir = '', data = null, BIG = { photo: 1 };
+    function lsGet(k) { try { var v = localStorage.getItem('xrf.' + k); return v === null ? undefined : JSON.parse(v); } catch (e) { return undefined; } }
+    function lsSet(k, v) { try { localStorage.setItem('xrf.' + k, JSON.stringify(v)); } catch (e) {} }
+    function readJson(f) { try { var r = FS.readFile(f); return r.err === 0 && r.data ? JSON.parse(r.data) : undefined; } catch (e) { return undefined; } }
+    function write(f, v) { try { return FS.writeFile(f, JSON.stringify(v)).err === 0; } catch (e) { return false; } }
+    function init() {
+      if (data) { return; }
+      data = {};
+      if (!FS) { return; }
+      try { dir = sysPath('userData') + '/chavebaixa-vfx'; FS.makedir(dir); } catch (e) { dir = ''; return; }
+      var d = readJson(dir + '/config.json');
+      if (d && typeof d === 'object') { data = d; }
+    }
+    var api = {
+      get: function (k, def) {
+        init();
+        var v;
+        if (BIG[k]) { v = dir ? readJson(dir + '/' + k + '.json') : undefined; }
+        else if (Object.prototype.hasOwnProperty.call(data, k)) { return data[k]; }
+        if (v === undefined) { v = lsGet(k); if (v !== undefined && dir) { api.set(k, v); } }   // traz o que ainda estava no localStorage
+        return v === undefined ? def : v;
+      },
+      set: function (k, v) {
+        init();
+        if (BIG[k]) { if (dir) { write(dir + '/' + k + '.json', v); } }
+        else { data[k] = v; if (dir) { write(dir + '/config.json', data); } }
+        lsSet(k, v);
+      },
+      folder: function () { init(); return dir; }
+    };
+    return api;
+  })();
 
   // ------------------------------------------------------------ aviso
   var toastT = null;
@@ -397,7 +429,7 @@
   var favs = {}; (store.get('favs', []) || []).forEach(function (id) { favs[id] = true; });
   var hidden = {}; (store.get('hiddenCats', []) || []).forEach(function (id) { hidden[id] = true; });
   var tab = store.get('tab', 'cc'), query = '', selId = store.get('sel', ''), missing = {}, missKnown = false;
-  var opt = { hover: store.get('hover', true), hideMiss: store.get('hideMiss', false), adj: store.get('adj', false) };
+  var opt = { hover: store.get('hover', true), hideMiss: store.get('hideMiss', false), adj: store.get('adj', false), center: store.get('center', true) };
   function visCats() { return cats.filter(function (c) { return !hidden[c.id]; }); }
   function missOf(it) { return it.fx.filter(function (n) { return missing[n]; }); }
   function fxName(n) { return FXN[n] || n; }
@@ -542,11 +574,11 @@
     if (orig && FS && aeMajor >= 24 && store.get('restoreFail', 0) < aeMajor) {
       var rp = setHeader(it, orig[0], orig[1]); if (rp) { path = rp; restored = true; }
     }
-    host('apply', [path, mode, it.label]).then(function (res) {
+    host('apply', [path, mode, it.label, opt.center ? '1' : '0']).then(function (res) {
       if (res.newer && FS) {
         if (restored) { store.set('restoreFail', aeMajor); }   // este After nao le o original: daqui em diante usa o rebaixado
         var p = setHeader(it, 0x5E, 4);
-        if (p) { return host('apply', [p, mode, it.label]).then(function (r2) { if (r2.ok && !restored) { r2.msg += '\n(Preset de After mais novo: converti para funcionar aqui.)'; } done(r2); }); }
+        if (p) { return host('apply', [p, mode, it.label, opt.center ? '1' : '0']).then(function (r2) { if (r2.ok && !restored) { r2.msg += '\n(Preset de After mais novo: converti para funcionar aqui.)'; } done(r2); }); }
         res.msg = 'Este preset foi salvo num After mais novo e não consegui converter.';
       }
       done(res);
@@ -607,7 +639,7 @@
     var e = $(id); e.checked = !!opt[key];
     e.addEventListener('change', function () { opt[key] = e.checked; store.set(key, e.checked); renderList(); });
   }
-  bindOpt('cHover', 'hover'); bindOpt('cHideMiss', 'hideMiss'); bindOpt('cAdj', 'adj');
+  bindOpt('cHover', 'hover'); bindOpt('cHideMiss', 'hideMiss'); bindOpt('cAdj', 'adj'); bindOpt('cCenter', 'center');
   function openFolder(sub) {
     if (!CEP) { toast('Só funciona dentro do After Effects.'); return; }
     host('openFolder', [sysPath('extension') + '/preset' + (sub || '')]).then(function (r) { if (!r.ok) { toast('Não consegui abrir a pasta.\n' + (r.msg || '')); } });
@@ -705,8 +737,7 @@
         var c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
         var data = c.toDataURL('image/jpeg', 0.86);
-        try { localStorage.setItem('xrf.photo', JSON.stringify(data)); }
-        catch (e) { toast('Essa foto é grande demais para guardar. Tente uma menor.'); return; }
+        store.set('photo', data);
         photo = data; cache = {};
         setLook('bg', 'photo');
         toast('Foto aplicada no fundo.');
@@ -715,7 +746,7 @@
     fr.readAsDataURL(f);
   });
   $('bPhotoDel').addEventListener('click', function () {
-    photo = ''; cache = {}; try { localStorage.removeItem('xrf.photo'); } catch (e) {}
+    photo = ''; cache = {}; store.set('photo', '');
     if (look.bg === 'photo') { look.bg = DEF.bg; store.set('bg', DEF.bg); }
     applyBg(); toast('Foto apagada.');
   });
