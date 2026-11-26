@@ -1,6 +1,6 @@
 // chavebaixa VFX 2.0 - lado do After Effects (ExtendScript / ES3)
 var XRF = XRF || {};
-XRF.VERSION = "2.1.2";
+XRF.VERSION = "2.1.3";
 
 (function () {
     function q(s) {
@@ -23,6 +23,69 @@ XRF.VERSION = "2.1.2";
         if (layer) { layer.selected = true; }
     }
 
+    // Presets guardam as coordenadas dos efeitos (centro do Optics Compensation, Twirl, CC Lens, Radial Blur, ancora do
+    // Transform...) em pixels da camada de quem salvou. Num preset feito em 4K o centro fica em 1920,1080, que numa camada
+    // Full HD e o canto. Aqui o tamanho original e descoberto pelo centro que o preset usa e todos os pontos dos efeitos
+    // novos sao convertidos para o tamanho desta camada.
+    var CENTER_RX = /cent(er|re|ro)|centr|mittel|zentr/i;
+    function firstVal(pr) { return pr.numKeys > 0 ? pr.keyValue(1) : pr.value; }
+    function eachPoint(layer, fromIndex, fn) {
+        var fx = layer.property("ADBE Effect Parade"), e, p, ef, pr;
+        for (e = fromIndex; e <= fx.numProperties; e++) {
+            ef = fx.property(e);
+            for (p = 1; p <= ef.numProperties; p++) {
+                pr = ef.property(p);
+                try { if (pr.propertyValueType === PropertyValueType.TwoD_SPATIAL) { fn(ef, pr); } } catch (e4) {}
+            }
+        }
+    }
+    function mapProp(pr, f) {
+        var k;
+        if (pr.numKeys > 0) { for (k = 1; k <= pr.numKeys; k++) { pr.setValueAtKey(k, f(pr.keyValue(k))); } }
+        else { pr.setValue(f(pr.value)); }
+    }
+    function centerPoints(layer, fromIndex) {
+        var n = 0;
+        try {
+            var w = layer.width, h = layer.height;
+            if (!w || !h) { return 0; }
+            var votes = {}, best = null;
+            eachPoint(layer, fromIndex, function (ef, pr) {
+                var v = firstVal(pr), cand = false, pos;
+                if (ef.matchName === "ADBE Geometry2") {
+                    // a ancora do Transform so conta como centro quando esta junto da posicao (Transform "parado")
+                    if (pr.matchName === "ADBE Geometry2-0001") { pos = firstVal(ef.property("ADBE Geometry2-0002")); cand = Math.abs(pos[0] - v[0]) < 1 && Math.abs(pos[1] - v[1]) < 1; }
+                } else { cand = CENTER_RX.test(pr.name); }
+                if (cand) {
+                    var key = Math.round(v[0]) + "," + Math.round(v[1]);
+                    votes[key] = (votes[key] || 0) + 1;
+                    if (best === null || votes[key] > votes[best]) { best = key; }
+                }
+            });
+            if (best === null) { return 0; }
+            var c = best.split(","), sx = (w / 2) / Number(c[0]), sy = (h / 2) / Number(c[1]);
+            if (!(Number(c[0]) > 0 && Number(c[1]) > 0)) { return 0; }
+            if (Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001) { return 0; }   // preset feito neste mesmo tamanho
+            eachPoint(layer, fromIndex, function (ef, pr) {
+                try { mapProp(pr, function (v) { return [v[0] * sx, v[1] * sy]; }); n++; } catch (e5) {}
+            });
+            // Transform parado com ancora e posicao separadas empurra a imagem para fora do meio: centraliza os dois
+            var fx = layer.property("ADBE Effect Parade"), e, ef, an, po, va, vp;
+            for (e = fromIndex; e <= fx.numProperties; e++) {
+                ef = fx.property(e);
+                if (ef.matchName !== "ADBE Geometry2") { continue; }
+                try {
+                    an = ef.property("ADBE Geometry2-0001"); po = ef.property("ADBE Geometry2-0002");
+                    if (an.numKeys || po.numKeys || an.expressionEnabled || po.expressionEnabled) { continue; }
+                    va = an.value; vp = po.value;
+                    if (Math.abs(va[0] - vp[0]) < 1 && Math.abs(va[1] - vp[1]) < 1) { continue; }
+                    an.setValue([w / 2, h / 2]); po.setValue([w / 2, h / 2]); n++;
+                } catch (e6) {}
+            }
+        } catch (e3) {}
+        return n;
+    }    function fxCount(layer) { try { return layer.property("ADBE Effect Parade").numProperties; } catch (e) { return 0; } }
+
     XRF.ping = function () {
         try {
             var c = activeComp();
@@ -43,12 +106,12 @@ XRF.VERSION = "2.1.2";
     };
 
     // mode: "sel" = nas camadas selecionadas, "adj" = numa camada de ajuste nova
-    XRF.apply = function (path, mode, label) {
+    XRF.apply = function (path, mode, label, center) {
         var comp = activeComp();
         if (!comp) { return fail('Abra uma composi\u00e7\u00e3o primeiro (clique na timeline dela).'); }
         var file = new File(path);
         if (!file.exists) { return fail('N\u00e3o achei o arquivo do preset:\n' + path); }
-        var sel = comp.selectedLayers, layers = [], i, done = 0, undo = false, adj = null;
+        var sel = comp.selectedLayers, layers = [], i, done = 0, undo = false, adj = null, nfx = 0;
         for (i = 0; i < sel.length; i++) { layers.push(sel[i]); }
         if (mode !== 'adj' && !layers.length) { return fail('Selecione pelo menos uma camada na timeline.'); }
         try {
@@ -67,12 +130,15 @@ XRF.VERSION = "2.1.2";
                 }
                 selectOnly(comp, adj);
                 adj.applyPreset(file);
+                if (center === '1') { centerPoints(adj, 1); }
                 done = 1;
             } else {
                 // applyPreset age em TODAS as camadas selecionadas: por isso uma de cada vez
                 for (i = 0; i < layers.length; i++) {
                     selectOnly(comp, layers[i]);
+                    nfx = fxCount(layers[i]);
                     layers[i].applyPreset(file);
+                    if (center === '1') { centerPoints(layers[i], nfx + 1); }
                     done++;
                 }
                 selectOnly(comp, null);
